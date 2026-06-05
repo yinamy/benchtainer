@@ -1,6 +1,7 @@
 FROM ubuntu:noble
 
-RUN apt-get update --fix-missing
+##RUN apt-get update --fix-missing
+RUN apt-get update
 
 # For golang, 1.23 is the first version that supports generators in the language.
 RUN apt-get install -y make curl wget cmake git g++-multilib ocaml-dune ocaml menhir opam rustup hyperfine linux-tools-generic golang-1.23 wabt
@@ -9,6 +10,7 @@ RUN apt-get install -y make curl wget cmake git g++-multilib ocaml-dune ocaml me
 ##   (first because it is very slow; first makes it less likely to rebuild)
 ## Instructions from https://v8.dev/docs/build
 
+COPY .git /.git
 COPY depot_tools /depot_tools
 ENV PATH=$PATH:/depot_tools
 WORKDIR /v8
@@ -90,6 +92,7 @@ RUN cargo install --locked --path .
 ## Build fiber-c
 
 ENV ROOT=
+ENV ENGINE_ROOT_DIR=..
 COPY fiber-c /fiber-c
 WORKDIR /fiber-c
 RUN make
@@ -105,6 +108,9 @@ ADD contents/Makefile /Makefile
 ## This one is for running a command and logging the output (e.g. for perf stat runs).
 ADD contents/run_and_log.sh /run_and_log.sh
 ADD contents/justfile /justfile
+
+## Copy over the scripts for getting engine/compiler version info
+COPY version-info /version-info
 
 WORKDIR /
 
