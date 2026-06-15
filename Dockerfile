@@ -1,14 +1,15 @@
 FROM ubuntu:noble
 
-RUN apt-get update --fix-missing
+RUN apt-get update
 
 # For golang, 1.23 is the first version that supports generators in the language.
-RUN apt-get install -y make curl wget cmake git g++-multilib ocaml-dune ocaml menhir opam rustup hyperfine linux-tools-generic golang-1.23 wabt
+RUN apt-get install -y make curl wget cmake git g++-multilib ocaml-dune ocaml menhir opam rustup hyperfine linux-tools-generic golang-1.23 wabt libx11-dev libxft-dev
 
 ## Build v8
 ##   (first because it is very slow; first makes it less likely to rebuild)
 ## Instructions from https://v8.dev/docs/build
 
+COPY .git /.git
 COPY depot_tools /depot_tools
 ENV PATH=$PATH:/depot_tools
 WORKDIR /v8
@@ -44,12 +45,39 @@ WORKDIR /binaryen
 # RUN CC=../wasi-sdk-30.0-x86_64-linux/bin/clang cmake . && make
 RUN CXX=g++ CC=gcc cmake . && CXX=g++ CC=gcc make -j12
 
+ENV PATH="$PATH:/binaryen/bin"
+
+# Install node, which is a dependency for js_of_ocaml
+
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh | bash
+ENV NVM_DIR="/root/.nvm"
+# Everything that needs node in the environment must be run after `"${NVM_DIR}/nvm.sh"`
+RUN . "${NVM_DIR}/nvm.sh" && \
+     nvm install 26
+RUN . "${NVM_DIR}/nvm.sh" && \
+     node -v
+
+## Build js_of_ocaml from source
+
+COPY js_of_ocaml /js_of_ocaml
+WORKDIR /js_of_ocaml
+RUN opam init --yes --disable-sandboxing
+## Make opam switch for ocaml 5.4.1 (effect handlers are only supported in ocaml 5.0 or later)
+RUN opam switch create 5.4.1 ocaml-base-compiler.5.4.1
+RUN opam switch set 5.4.1
+RUN eval $(opam env --switch=5.4.1)
+## Now do the rest of the stuff
+RUN opam install --yes --deps-only -t js_of_ocaml js_of_ocaml-lwt js_of_ocaml-compiler js_of_ocaml-toplevel js_of_ocaml-ppx js_of_ocaml-ppx_deriving_json js_of_ocaml-tyxml
+RUN opam install --yes odoc lwt_log yojson ocp-indent graphics higlo opam-format
+RUN . "${NVM_DIR}/nvm.sh" && \
+    eval $(opam env --switch=5.4.1) make all
+
 ## Build custom (stack-switching) version of reference interpreter
 
 ## opam is needed for the reference interpreter build
 # Disable-sandboxing was recommended here for use inside Docker containers: https://github.com/ocaml/opam/issues/4327#issuecomment-678630182
-RUN opam init --yes --disable-sandboxing
-RUN opam install --yes js_of_ocaml-compiler js_of_ocaml-ppx
+# RUN opam init --yes --disable-sandboxing
+#RUN opam install --yes js_of_ocaml-compiler js_of_ocaml-ppx
 
 ## Build ref interpreter
 
@@ -90,6 +118,7 @@ RUN cargo install --locked --path .
 ## Build fiber-c
 
 ENV ROOT=
+ENV ENGINE_ROOT_DIR=..
 COPY fiber-c /fiber-c
 WORKDIR /fiber-c
 RUN make
@@ -98,6 +127,10 @@ RUN make
 ## build is copied in in case you want to run them anyway.
 
 COPY go-examples /go-examples
+
+## OCaml code to run
+
+COPY ocaml-examples /ocaml-examples
 
 ## The contents/Makefile has some useful commands for running things in the container.
 ADD contents/Makefile /Makefile
