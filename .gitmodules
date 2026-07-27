@@ -28,3 +28,6 @@
 [submodule "waeio"]
 	path = waeio
 	url = https://github.com/wasmfx/waeio
+[submodule "js_of_ocaml"]
+	path = js_of_ocaml
+	url = https://github.com/ocsigen/js_of_ocaml.git
