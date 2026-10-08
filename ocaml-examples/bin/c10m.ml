@@ -33,21 +33,18 @@ let () =
     (* Main loop *)
     for i = 0 to total_conn - 1 do
       let j = i mod active_conn in
-        match_with rs.(j) stack_kb
+        (match rs.(j) stack_kb with
           (* On return, increment number of completed tasks *)
-        { retc = (fun (result : int32) -> 
-            count := Int32.add !count result;
-            if ((i + active_conn) < total_conn) then
-              (* TODO: Check if this actually calls cont.new *)
-              rs.(j) <- (fun i -> async_worker i)
+          | result -> 
+              count := Int32.add !count result;
+              if ((i + active_conn) < total_conn) then
+                (* TODO: Check if this actually calls cont.new *)
+                rs.(j) <- (fun i -> async_worker i)
+          | exception exn -> raise exn
+          | effect Yield n, k ->
+              assert (n = stack_kb);
+              continue k ()
             );
-          exnc = raise;
-          effc = fun (type a) (eff : a Effect.t) ->
-            match eff with
-              | Yield n -> Some (fun (k : (a, _) continuation) ->
-                  assert (n = stack_kb);
-                  continue k ())
-              | _ -> None };
     done;
     (* TODO: replace this with some output validation *)
     Printf.printf "Sum: %d\n" (Int32.to_int !count)

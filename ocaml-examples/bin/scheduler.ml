@@ -30,21 +30,16 @@ module Scheduler : Scheduler = struct
 
   let rec run : 'a. (unit -> 'a) -> unit =
     fun main ->
-      match_with main ()
-      { retc = (fun _ -> dequeue ());
-        exnc = (fun e -> raise e);
-        effc = (fun (type b) (eff: b Effect.t) ->
-            match eff with
-            | Async f -> Some (fun (k: (b, _) continuation) ->
-                    enqueue (continue k);
-                    run f
-            )
-            | Yield -> Some (fun k ->
-                    enqueue (continue k);
-                    dequeue ()
-            )
-            | _ -> None
-        )}
+      (match main () with
+        | _ -> dequeue ()
+        | exception exn -> raise exn
+        | effect (Async f), k ->
+            enqueue (continue k);
+            run f
+        | effect Yield, k ->
+            enqueue (continue k);
+            dequeue ()
+        )
 end
 
 open Scheduler

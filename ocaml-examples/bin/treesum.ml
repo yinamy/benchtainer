@@ -13,23 +13,25 @@ let rec build_tree n =
     else let subtree = build_tree (n - 1) in Node (subtree, subtree)
 
 (* Traverse the tree *)
-let rec tree_walker = function
-  | Leaf x -> perform (Yield x)
-  | Node (l, r) ->
-    tree_walker l;
-    tree_walker r
+let rec tree_walker = 
+  let sum = ref 0 in function
+    | Leaf x -> perform (Yield x); x
+    | Node (l, r) ->
+        let left_sum = tree_walker l in
+        let right_sum = tree_walker r in
+          sum := left_sum + !sum;
+          sum := right_sum + !sum;
+          !sum
 
 let () =
   let result = ref 0 in
   let mytree = build_tree(25) in
-    match_with tree_walker mytree
-    { retc = (fun () -> ());
-      exnc = raise;
-      effc = fun (type a) (eff : a Effect.t) ->
-        match eff with
-          | Yield n -> Some (fun (k : (a, _) continuation) ->
+    (match tree_walker mytree with
+      | a -> Printf.printf "Sum: %d\n" a
+      | exception exn -> raise exn
+      | effect Yield n, k ->
           result := !result + n;
-          continue k ())
-          | _ -> None };
+          continue k ()
+      );
     (* Todo: replace this with some output validation *)
-    Printf.printf "Sum: %d\n" !result
+    Printf.printf "Result: %d\n" !result

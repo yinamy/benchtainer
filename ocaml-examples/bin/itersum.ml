@@ -10,14 +10,11 @@ let count_up n =
 
 let () =
   let result = ref 0 in
-    match_with count_up 100000000
-    { retc = (fun () -> ());
-      exnc = raise;
-      effc = fun (type a) (eff : a Effect.t) ->
-        match eff with
-          | Yield n -> Some (fun (k : (a, _) continuation) ->
-              result := !result + n;
-              continue k ())
-          | _ -> None };
+  (match count_up 100000000 with
+    | () -> ()
+    | effect Yield n, k ->
+        result := !result + n;
+        continue k ()
+    | exception exn -> raise exn);
     (* Todo: replace this with some output validation *)
     Printf.printf "Sum: %d\n" !result
